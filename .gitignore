@@ -1,0 +1,6 @@
+#ignorar los archivos de python y las variables de entorno
+
+.env
+*.pyc
+__pycache__/
+venv/
