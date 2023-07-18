@@ -1,8 +1,8 @@
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain import OpenAI
 from langchain.tools import StructuredTool
-from tools_math import OperacionesMatematicas
-from tools_search import BusquedaEnBd
+from v1.tools_math import OperacionesMatematicas
+from tools.tools_search import BusquedaEnBd
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.agents.react.base import DocstoreExplorer
 from langchain.agents import AgentType

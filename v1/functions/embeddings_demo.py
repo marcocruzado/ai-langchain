@@ -15,6 +15,7 @@ print(os.environ["OPENAI_API_KEY"])
 
 path="./data/Reglamento-Nacional-de-Transito.txt"
 
+# Loading Documents txt
 def documents_loader(path: str) -> List[Tuple[str, str]]:
     # Loading Documents
     loader = TextLoader(path, encoding="utf-8")
@@ -44,9 +45,10 @@ connection_string = PGVector.connection_string_from_db_params(
     password=os.environ.get("PGVECTOR_PASSWORD", "password"),
 )
 
+print(connection_string)
 
 # name of the collection in the database
-collection_name = "reglas_de_transito"
+collection_name = "promociones"
 
 
 def save_database(collection_name: str, connection_string: str, docs: List[Document], embeddings: OpenAIEmbeddings) -> str:
@@ -64,5 +66,4 @@ def store():
         connection_string=connection_string,
         embedding_function=embeddings,
     )
-    print(storedb,type(storedb))
     return storedb
