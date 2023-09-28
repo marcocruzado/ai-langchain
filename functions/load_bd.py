@@ -12,7 +12,7 @@ con = psycopg2.connect(
     port=os.getenv("PORT")
 )
 
-df = pd.read_csv(r'C:\Users\lopez\Desktop\proyecto-agente\data\datos_gastronomia.csv',sep=',', encoding='utf-8', dtype=str)
+df = pd.read_csv(r'C:\Users\lopez\Desktop\proyecto-agente\data\datos_turismo.csv',sep=',', encoding='utf-8', dtype=str)
 
 
 data = []
@@ -48,7 +48,7 @@ print('Insertando datos a la base de datos...')
 print('----->',data)
 
 
-cur.execute(SQL_TRUNCATE)
+#cur.execute(SQL_TRUNCATE)
 cur.executemany(SQL_INSERT, data)   
 con.commit()
 cur.close()

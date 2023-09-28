@@ -1,20 +1,30 @@
-from langchain.agents import create_sql_agent
-from langchain.agents import Tool, AgentType, initialize_agent, AgentExecutor
-from functions.embeddings_demo import store
+from langchain.agents import Tool, AgentType, initialize_agent
 from langchain.chat_models import ChatOpenAI
-from langchain import OpenAI, SerpAPIWrapper, LLMChain, SQLDatabase, SQLDatabaseChain
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts.prompt import PromptTemplate
-from langchain.agents.agent_toolkits import SQLDatabaseToolkit
-from langchain.agents import ZeroShotAgent, Tool, AgentExecutor
-from langchain import OpenAI, SerpAPIWrapper, LLMChain
-import os
-from langchain.callbacks import get_openai_callback
+from langchain import OpenAI, SerpAPIWrapper, SQLDatabase, SQLDatabaseChain 
 from langchain.chains import SQLDatabaseSequentialChain
-# Otra forma desde una URL
-from langchain.chat_models import ChatOpenAI
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.prompts import load_prompt
+from langchain.memory import ConversationBufferMemory
+from langchain.prompts import MessagesPlaceholder
+from langchain import PromptTemplate, LLMChain
+from langchain.prompts.chat import (
+    ChatPromptTemplate,
+    SystemMessagePromptTemplate,
+    AIMessagePromptTemplate,
+    HumanMessagePromptTemplate,
+)
+from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser
+from langchain.prompts import BaseChatPromptTemplate
+from langchain import SerpAPIWrapper, LLMChain
+
+from typing import List, Union
+from langchain.schema import AgentAction, AgentFinish, HumanMessage
+import re
+from getpass import getpass
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
+from langchain.agents.agent_toolkits import SQLDatabaseToolkit
+from langchain.agents import create_sql_agent
+import os
+
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,11 +40,8 @@ search = SerpAPIWrapper(serpapi_api_key=os.environ["SERPAPI_API_KEY"], params={
                         "engine": "google", "google_domain": "google.com", "gl": "pe", "hl": "es-419"})
 
 # -------------------------------------------------
+
 # postgresql+psycopg2://pguser:password@localhost:5433/doc_search
-
-
-llm = ChatOpenAI(temperature=0, model="gpt-3.5-turbo-0613")
-llm1 = OpenAI(temperature=0, streaming=True, callbacks=[StreamingStdOutCallbackHandler()])
 
 custon_table_info = {
     "Track": """
@@ -69,76 +76,54 @@ id      descuento       descuento_valor descuento_descripcion   url_establecimie
     """
 }
 
-db = SQLDatabase.from_uri(
-    'postgresql+psycopg2://postgres:root@localhost:5432/postgres', include_tables=['promociones'], custom_table_info=custon_table_info)
+input_db = SQLDatabase.from_uri('postgresql+psycopg2://postgres:root@localhost:5432/postgres',
+                                include_tables=['promociones'], custom_table_info=custon_table_info)
 
+llm = ChatOpenAI(temperature=0, model_name="gpt-3.5-turbo")
+
+
+db_agent = SQLDatabaseSequentialChain.from_llm(llm,
+                                     database=input_db,
+                                     verbose=True,
+                                     input_key="input",
+                                     )
 
 # -------------------------------------------------
-_DEFAULT_TEMPLATE = """ Eres un agente del grupo el comercio y un excelente administrador de base de datos, tienes que responder preguntas sobre descuentos en promociones a las que tienes acceso los suscriptores , resolver todas sus dudas en base a la informacion que tienes dentro de la base de datos, solo puedes usar la tabla que se llama promociones, ademas tienes un custon_table_info que te ayudara a saber que columnas tiene la tabla y que tipo de datos tiene cada columna, todas las columnas tienen el tipo da dato text.
-ademas seguiras este formato:
-
-Pregunta: "Pregunta aqui"
-Condiciones: "si te preguntan de cuzco entonces dile "no mamita, no hay nada en cuzco" "
-SQLQuery: "SQL Query a ejecutar"
-SQLResult: "Resultado de la SQLQuery"
-Answer: "Respuesta final aqui siempre en español"
-
-para responder solo usara la tabla:
-
-promociones
-
-si no tienes una respuesta adecuada, entonces tienes que decirle al usuario que se revisara para brindarle la mejor informacion mas adelante.
-
-
-
-pregunta: {input}
-"""
-PROMPT = PromptTemplate(
-    input_variables=["input"], template=_DEFAULT_TEMPLATE
-)
-
-
-# db_chain = SQLDatabaseChain.from_llm(llm1, db, verbose=True)
-db_chain = SQLDatabaseChain.from_llm(llm, db, verbose=True, prompt=PROMPT)
-
 
 tools = [
     Tool(
-        name="Club Promociones DB",
-        func=db_chain.run,
-        description="usado para responder preguntas a los suscriptores sobre descuentos en promociones a las que tienen acceso los suscriptores de el club el comercio",
-    )
+        name="Search",
+        func=search.run,
+        description="useful for when you need to answer questions about current events. You should ask targeted questions",
+    ),
+    Tool(
+        name="Search in Database",
+        func=db_agent.run,
+        description="cuando necesites saber sobre promociones de los establecimientos que el club el comercio,numeros de telefono, correos, etc",
+    ),
 ]
 
-prefix = """responde lo mejor que puedas usando la herramienta que tengas disponible:"""
-suffix = """cuando tengas la respuesta, escribe: "estimado suscriptor, la respuesta es: " y luego la respuesta que tengas
-{chat_history}
-Pregunta: {input}
-{agent_scratchpad}"""
 
-prompt = ZeroShotAgent.create_prompt(
+
+agent_kwargs = {
+    "extra_prompt_messages": [MessagesPlaceholder(variable_name="chat_history")],
+}
+
+memory = ConversationBufferMemory(
+    memory_key="chat_history", return_messages=True)
+
+agent = initialize_agent(
     tools,
-    prefix=prefix,
-    suffix=suffix,
-    input_variables=["input", "agent_scratchpad", "chat_history"],
-)
-
-memory = ConversationBufferMemory(memory_key="chat_history")
-
-llm_chain = LLMChain(llm=llm, prompt=prompt)
-
-agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools)
-
-agent_executor = AgentExecutor.from_agent_and_tools(
-    agent=agent, tools=tools, verbose=True, memory=memory
+    llm=llm,
+    agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
+    verbose=True,
+    agent_kwargs=agent_kwargs,
+    memory=memory,
+    handle_parsing_errors=True,
 )
 
 
 while True:
-    question = str(input("Question: "))
-    if question == "quit":
-        break
-    respuesta = agent_executor.run(input=question)
-    
-    print("-------------------------------------------------")
-    print(respuesta)
+    user_input = str(input("User:"))
+    agent_output = agent.run(input=str(user_input))
+    print("Agent:", agent_output)

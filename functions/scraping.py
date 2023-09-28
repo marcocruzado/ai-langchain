@@ -3,8 +3,20 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 
+all_promociones = [
+    'educacion',
+    'entretenimiento',
+    'gastronomia',
+    'productos-servicios',
+    'hogar',
+    'mascotas',
+    'moda-belleza',
+    'turismo',
+]
 # URL a la que se realizará el web scraping
-url = "https://clubelcomercio.pe/beneficio/buscar/tipo/gastronomia/distrito/150122"
+#url = "https://clubelcomercio.pe/beneficio/buscar/tipo/gastronomia/distrito/150122"
+url = 'https://clubelcomercio.pe/catalogo-virtual/tipo/turismo'
+
 
 # Realizar la solicitud GET a la página web
 response = requests.get(url)
@@ -17,22 +29,11 @@ soup = BeautifulSoup(html_content, "html.parser")
 # Extraer información relevante de la página
 productos = soup.find_all("div", class_="item_colc")
 
+
 promociones = []
 
 def out_blank_spaces(text):
     return text.replace('\n', '').replace('\t', '').replace('\r', '').strip()
-
-# Recorrer las ofertas y extraer los detalles
-for producto in productos:
-    descuento = out_blank_spaces(producto.find('div', class_='descuento').text) 
-    descuento_valor = out_blank_spaces(producto.find('h3').text)
-    descuento_descripcion = out_blank_spaces(producto.find('div', class_='ofert_cs').find('p').text)
-    url_establecimiento = out_blank_spaces(producto.find('a')['href'])
-    nombre = out_blank_spaces(producto.find('h2').text)
-    facebook = out_blank_spaces(producto.find('a', class_='share-link')['href'])
-    categoria = out_blank_spaces(producto.find('div', class_='ofert_cs').find('h3').text)
-    # Agregar los datos a la lista
-    promociones.append([descuento, descuento_valor, descuento_descripcion, url_establecimiento, nombre, facebook, categoria])
 
 def split_pipe(text):
     if '|' in text:
@@ -47,6 +48,20 @@ def split_pipe(text):
         horario = ''
         return direccion, horario
 
+
+
+# Recorrer las ofertas y extraer los detalles
+for producto in productos:
+    descuento_element = producto.find('div', class_='descuento')
+    descuento = out_blank_spaces(descuento_element.text) if descuento_element else ''
+    descuento_valor = out_blank_spaces(producto.find('h3').text)
+    descuento_descripcion = out_blank_spaces(producto.find('div', class_='ofert_cs').find('p').text)
+    url_establecimiento = out_blank_spaces(producto.find('a')['href'])
+    nombre = out_blank_spaces(producto.find('h2').text)
+    facebook = out_blank_spaces(producto.find('a', class_='share-link')['href'])
+    categoria = out_blank_spaces(producto.find('div', class_='ofert_cs').find('h3').text)
+    # Agregar los datos a la lista
+    promociones.append([descuento, descuento_valor, descuento_descripcion, url_establecimiento, nombre, facebook, categoria])
 
 
 for promocion in promociones:
@@ -81,18 +96,9 @@ for promocion in promociones:
 
 
 # Guardar los datos en un archivo CSV
-filename = './data/datos_gastronomia.csv'
+filename = './data/datos_turismo.csv'
 with open(filename, 'w', newline='', encoding='utf-8') as file:
     #escribir el archivo csv y adicionarle como primera columna un id autoincrementable
     writer = csv.writer(file)
     writer.writerow(["descuento", "descuento_valor", "descuento_descripcion", "url_establecimiento", "nombre", "facebook", "categoria", "descripcion", "direccion", "horario","vigencia", "condicion", "telefono", "correo", "web", "terminos"])
     writer.writerows(promociones)
-
-    """  writer = csv.writer(file)
-    writer.writerow(["descuento", "descuento_valor", "descuento_descripcion", "url_establecimiento", "nombre", "facebook", "categoria", "descripcion", "direccion", "horario","vigencia", "condicion", "telefono", "correo", "web", "terminos"])
-    writer.writerows(promociones)
-
-print('Los datos se han guardado en el archivo', filename)  """
-
-#crea una consulta sql que sirva para insertar los datos en la tabla promociones y si no esta creada la crea
-# CREATE TABLE IF NOT EXISTS promociones (id INTEGER PRIMARY KEY AUTOINCREMENT, descuento TEXT, descuento_valor TEXT, descuento_descripcion TEXT, url_establecimiento TEXT, nombre TEXT, facebook TEXT, categoria TEXT, descripcion TEXT, direccion TEXT, horario TEXT, vigencia TEXT, condicion TEXT, telefono TEXT, correo TEXT, web TEXT, terminos TEXT)
